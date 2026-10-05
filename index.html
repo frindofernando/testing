@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hello World</title>
+  <style>
+    :root {
+      --hue: 220;
+      --mx: 50%;
+      --my: 50%;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      font-family: system-ui, "Segoe UI", sans-serif;
+      color: #fff;
+      background:
+        radial-gradient(circle at var(--mx) var(--my),
+          hsl(var(--hue) 80% 34%),
+          hsl(calc(var(--hue) + 60) 70% 8%) 70%);
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    main {
+      position: relative;
+      text-align: center;
+      padding: 16px;
+    }
+
+    h1 {
+      font-size: clamp(2.75rem, 13vw, 9rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+    }
+
+    .letter {
+      display: inline-block;
+      transition: color 0.4s, text-shadow 0.4s;
+      animation: float 3s ease-in-out infinite;
+      animation-delay: calc(var(--i) * -0.25s);
+    }
+
+    .letter:hover {
+      color: hsl(calc(var(--hue) + 140) 100% 72%);
+      text-shadow: 0 0 32px hsl(calc(var(--hue) + 140) 100% 60%);
+    }
+
+    .letter.pop {
+      animation: pop 0.6s cubic-bezier(0.3, 1.6, 0.5, 1);
+    }
+
+    @keyframes float {
+      50% { transform: translateY(-0.06em); }
+    }
+
+    @keyframes pop {
+      40% { transform: translateY(-0.45em) rotate(var(--tilt, 12deg)) scale(1.25); }
+    }
+
+    p {
+      margin-top: 1.5rem;
+      font-size: clamp(0.95rem, 2.5vw, 1.15rem);
+      opacity: 0.8;
+    }
+
+    .counter {
+      display: inline-block;
+      margin-top: 1rem;
+      padding: 0.4em 1em;
+      border-radius: 999px;
+      background: rgb(255 255 255 / 0.12);
+      font-variant-numeric: tabular-nums;
+      opacity: 1;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .letter { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="fx"></canvas>
+
+  <main>
+    <h1 id="title" aria-label="Hello World"></h1>
+    <p>Gerakkan kursor, sentuh hurufnya, lalu klik di mana saja.</p>
+    <p class="counter">Klik: <span id="count">0</span></p>
+  </main>
+
+  <script>
+    const root = document.documentElement;
+    const title = document.getElementById('title');
+    const count = document.getElementById('count');
+    const canvas = document.getElementById('fx');
+    const ctx = canvas.getContext('2d');
+
+    let hue = 220;
+    let clicks = 0;
+    let particles = [];
+    let running = false;
+
+    // Pecah teks menjadi huruf supaya tiap huruf bisa bereaksi sendiri
+    [...'Hello World'].forEach((char, i) => {
+      const letter = document.createElement('span');
+      letter.className = 'letter';
+      letter.textContent = char === ' ' ? ' ' : char;
+      letter.setAttribute('aria-hidden', 'true');
+      letter.style.setProperty('--i', i);
+      letter.addEventListener('pointerenter', () => pop(letter));
+      title.appendChild(letter);
+    });
+
+    function pop(letter) {
+      letter.style.setProperty('--tilt', `${Math.random() * 40 - 20}deg`);
+      letter.classList.remove('pop');
+      void letter.offsetWidth; // paksa reflow agar animasi bisa diulang
+      letter.classList.add('pop');
+    }
+
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = innerWidth * dpr;
+      canvas.height = innerHeight * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function burst(x, y) {
+      for (let i = 0; i < 48; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 2 + Math.random() * 7;
+        particles.push({
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 2,
+          size: 2 + Math.random() * 4,
+          life: 1,
+          hue: hue + Math.random() * 120,
+        });
+      }
+      if (!running) {
+        running = true;
+        requestAnimationFrame(tick);
+      }
+    }
+
+    function tick() {
+      ctx.clearRect(0, 0, innerWidth, innerHeight);
+      particles = particles.filter((p) => p.life > 0);
+
+      for (const p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.15;
+        p.life -= 0.016;
+        ctx.globalAlpha = Math.max(p.life, 0);
+        ctx.fillStyle = `hsl(${p.hue} 100% 65%)`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      if (particles.length) {
+        requestAnimationFrame(tick);
+      } else {
+        running = false;
+      }
+    }
+
+    function celebrate(x, y) {
+      hue = (hue + 47) % 360;
+      root.style.setProperty('--hue', hue);
+      count.textContent = ++clicks;
+      burst(x, y);
+      title.querySelectorAll('.letter').forEach((letter, i) => {
+        setTimeout(() => pop(letter), i * 35);
+      });
+    }
+
+    addEventListener('pointermove', (e) => {
+      root.style.setProperty('--mx', `${e.clientX}px`);
+      root.style.setProperty('--my', `${e.clientY}px`);
+    });
+
+    addEventListener('pointerdown', (e) => celebrate(e.clientX, e.clientY));
+
+    addEventListener('keydown', (e) => {
+      if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault();
+        celebrate(innerWidth / 2, innerHeight / 2);
+      }
+    });
+
+    addEventListener('resize', resize);
+    resize();
+  </script>
+</body>
+</html>
